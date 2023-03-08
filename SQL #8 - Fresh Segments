@@ -1,0 +1,86 @@
+SQL queries for Case Study #8 - Fresh Segments
+https://8weeksqlchallenge.com/case-study-8/
+
+
+Case Study Questions:
+
+
+---------- Data Exploration and Cleansing ----------
+
+
+---------- Q1 ----------
+
+ALTER TABLE interest_metrics
+ALTER COLUMN month_year VARCHAR(10)
+
+UPDATE interest_metrics
+SET month_year = CONCAT(_year, '-', _month, '-01')
+WHERE month_year IS NOT NULL AND LEN(_month) = 2
+
+UPDATE interest_metrics
+SET month_year = CONCAT(_year, '-0', _month, '-01')
+WHERE month_year IS NOT NULL AND LEN(_month) = 1
+
+ALTER TABLE interest_metrics
+ALTER COLUMN month_year DATE
+
+
+---------- Q2 ----------
+
+SELECT month_year, COUNT(*) 'count_records'
+FROM interest_metrics
+GROUP BY month_year
+ORDER BY month_year
+
+
+---------- Q3 ----------
+
+-- I think we may be able to determine the correct month_year of each NULL using the gaps of the last 3 columns for each NULL record.
+-- But if we can't find the compatible month_year, we should ignore these rows since they're irrelevant without the context of date.
+
+
+---------- Q4 ----------
+
+SELECT COUNT(DISTINCT met.interest_id) 'num_values'
+FROM interest_metrics met LEFT JOIN interest_map map ON met.interest_id = map.id
+WHERE met.interest_id <> map.id
+
+SELECT COUNT(DISTINCT map.id) 'num_values'
+FROM interest_metrics met RIGHT JOIN interest_map map ON met.interest_id = map.id
+WHERE met.interest_id <> map.id
+
+
+---------- Q5 ----------
+
+SELECT id, COUNT(*) 'record_count'
+FROM interest_map
+GROUP BY id
+
+
+
+
+---------- Interest Analysis ----------
+
+
+---------- Q1 ----------
+
+SELECT interest_id
+FROM interest_metrics
+GROUP BY interest_id
+HAVING COUNT(DISTINCT month_year) = (SELECT COUNT(DISTINCT month_year) FROM interest_metrics)
+
+
+---------- Q2 ----------
+
+WITH tot_months AS
+(
+	SELECT interest_id, COUNT(DISTINCT month_year) 'total_months'
+	FROM interest_metrics
+	WHERE interest_id <> 'NULL'
+	GROUP BY interest_id
+)
+
+SELECT total_months, COUNT(*) 'records', (SELECT COUNT(*) FROM tot_months t2 WHERE t2.total_months >= t1.total_months)*100.0/(SELECT COUNT(*) FROM tot_months) 'percentage'
+FROM tot_months t1
+GROUP BY total_months
+ORDER BY 2 DESC
