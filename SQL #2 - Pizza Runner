@@ -1,0 +1,314 @@
+SQL queries for Case Study #2 - Pizza Runner
+https://8weeksqlchallenge.com/case-study-2/
+
+
+Case Study Questions:
+
+
+---------- Cleaning customer_orders ----------
+
+UPDATE customer_orders
+SET extras = NULL
+WHERE extras IN ('', 'null')
+
+UPDATE customer_orders
+SET exclusions = NULL
+WHERE exclusions IN ('', 'null')
+
+
+---------- Cleaning runner_orders ----------
+
+UPDATE runner_orders
+SET pickup_time = NULL
+WHERE pickup_time IN ('', 'null')
+
+UPDATE runner_orders
+SET distance = NULL
+WHERE distance IN ('', 'null')
+
+UPDATE runner_orders
+SET duration = NULL
+WHERE duration IN ('', 'null')
+
+UPDATE runner_orders
+SET cancellation = NULL
+WHERE cancellation IN ('', 'null')
+
+UPDATE runner_orders
+SET distance = TRIM('km' FROM distance)
+WHERE distance LIKE '%km'
+
+UPDATE runner_orders
+SET duration = TRIM('minutes' FROM duration)
+WHERE duration LIKE '%minutes'
+
+UPDATE runner_orders
+SET duration = TRIM('minute' FROM duration)
+WHERE duration LIKE '%minute'
+
+UPDATE runner_orders
+SET duration = TRIM('mins' FROM duration)
+WHERE duration LIKE '%mins'
+
+UPDATE runner_orders
+SET duration = TRIM('mins' FROM duration)
+WHERE duration LIKE '%mins'
+
+ALTER TABLE runner_orders
+ALTER COLUMN distance FLOAT
+
+ALTER TABLE runner_orders
+ALTER COLUMN duration INTEGER
+
+
+
+---------- A. Pizza Metrics ----------
+
+
+---------- Q1 ----------
+
+SELECT COUNT(*) 'number_of_pizzas_ordered'
+FROM customer_orders
+
+---------- Q2 ----------
+
+SELECT  COUNT(DISTINCT order_id) 'unique_orders'
+FROM customer_orders
+
+---------- Q3 ----------
+
+SELECT runner_id, COUNT(*) 'num_orders_delivered'
+FROM runner_orders
+WHERE cancellation IS NULL
+GROUP BY runner_id
+
+---------- Q4 ----------
+
+SELECT pizza_id, COUNT(*) 'amount_delivered'
+FROM customer_orders c JOIN runner_orders r
+ON c.order_id = r.order_id
+WHERE cancellation IS NULL
+GROUP BY pizza_id
+
+---------- Q5 ----------
+
+SELECT customer_id,
+	SUM(CASE WHEN pizza_name LIKE '%Meat%' THEN 1 ELSE 0 END) 'num_of_meat_pizzas',
+	SUM(CASE WHEN pizza_name LIKE '%Vegetarian%' THEN 1 ELSE 0 END) 'num_of_veg_pizzas'
+FROM customer_orders c JOIN pizza_names p ON c.pizza_id = p.pizza_id JOIN runner_orders r ON c.order_id = r.order_id
+WHERE cancellation IS NULL
+GROUP BY customer_id
+
+---------- Q6 ----------
+SELECT MAX(number_of_pizzas) 'Max_pizzas_in_order' FROM
+	(SELECT c.order_id, COUNT(*) 'number_of_pizzas'
+	FROM customer_orders c JOIN runner_orders r
+	ON c.order_id = r.order_id
+	WHERE cancellation IS NULL
+	GROUP BY c.order_id) num_pizzas
+
+---------- Q7 ----------
+
+SELECT customer_id, SUM(CASE WHEN (exclusions IS NOT NULL) OR (extras IS NOT NULL) THEN 1 ELSE 0 END) 'pizzas_with_changes',
+	SUM(CASE WHEN exclusions IS NULL AND extras IS NULL THEN 1 ELSE 0 END) 'pizzas_without_changes'
+FROM customer_orders o JOIN runner_orders r ON o.order_id = r.order_id
+WHERE cancellation IS NULL
+GROUP BY customer_id
+
+---------- Q8 ----------
+
+SELECT SUM(CASE WHEN (exclusions IS NOT NULL) AND (extras IS NOT NULL) THEN 1 ELSE 0 END) 'pizzas_with_exc_and_ext'
+FROM customer_orders o JOIN runner_orders r ON o.order_id = r.order_id
+WHERE cancellation IS NULL
+
+---------- Q9 ----------
+
+WITH h AS 
+	(SELECT 0 AS hour_of_day UNION ALL SELECT hour_of_day + 1 FROM h WHERE hour_of_day < 23),
+	o AS
+	(SELECT customer_orders.*, DATEPART(hour, order_time) 'hr' FROM customer_orders)
+
+SELECT h.hour_of_day, SUM(CASE WHEN h.hour_of_day = o.hr THEN 1 ELSE 0 END) 'pizzas_ordered'
+FROM h LEFT JOIN o ON h.hour_of_day = o.hr
+GROUP BY hour_of_day
+
+---------- Q10 ----------
+
+WITH d AS 
+	(SELECT 1 AS week_day UNION ALL SELECT week_day + 1 FROM d WHERE week_day < 7),
+	o AS
+	(SELECT DISTINCT customer_orders.order_id, DATEPART(weekday, order_time) 'd' FROM customer_orders)
+
+SELECT d.week_day, SUM(CASE WHEN d.week_day = o.d THEN 1 ELSE 0 END) 'pizzas_ordered'
+FROM d LEFT JOIN o ON d.week_day = o.d
+GROUP BY week_day
+
+
+
+---------- B. Runner and Customer Experience ----------
+
+
+---------- Q1 ----------
+
+WITH max_date AS
+	(SELECT MAX(registration_date) max_reg FROM runners),
+
+dates AS 
+	(SELECT CAST('2021-01-01' AS DATE) AS week_date UNION ALL SELECT DATEADD(day, 7, week_date) FROM dates, max_date WHERE week_date < max_reg)
+
+SELECT week_date, SUM(CASE WHEN DATEDIFF(day, week_date, registration_date) BETWEEN 0 AND 6 THEN 1 ELSE 0 END) 'registrated_this_week'
+FROM dates, runners 
+GROUP BY week_date
+
+---------- Q2 ----------
+
+WITH arrivals AS
+	(SELECT DISTINCT o.order_id, runner_id, order_time, pickup_time, DATEDIFF(minute, order_time, pickup_time) 'time_to_arrive'
+	FROM customer_orders o JOIN runner_orders r ON o.order_id = r.order_id
+	WHERE pickup_time IS NOT NULL)
+
+SELECT runner_id, AVG(time_to_arrive) 'avg_minutes_to_arrive'
+FROM arrivals
+GROUP BY runner_id
+
+---------- Q3 ----------
+
+WITH prep_times AS(
+	SELECT o.order_id, COUNT(*) 'n_pizzas', DATEDIFF(minute, order_time, pickup_time) 'prep_duration',
+	COUNT(*) * DATEDIFF(minute, order_time, pickup_time) 'row_prod'
+	FROM customer_orders o JOIN runner_orders r ON o.order_id = r.order_id
+	WHERE pickup_time IS NOT NULL
+	GROUP BY o.order_id, DATEDIFF(minute, order_time, pickup_time)
+	)
+
+SELECT ((COUNT(*)*SUM(row_prod)) - SUM(n_pizzas)*SUM(prep_duration)) /
+		SQRT(((COUNT(*)*SUM(n_pizzas*n_pizzas)) - SUM(n_pizzas)*SUM(n_pizzas))
+			*((COUNT(*)*SUM(prep_duration*prep_duration)) - SUM(prep_duration)*SUM(prep_duration))) AS 'correlation'
+FROM prep_times
+
+-- correlation is 0.83 - meaning, strong correlation.
+
+---------- Q4 ----------
+
+SELECT customer_id, AVG(distance) 'avg_distance'
+FROM customer_orders o JOIN runner_orders r ON o.order_id = r.order_id
+GROUP BY customer_id
+
+---------- Q5 ----------
+
+SELECT MAX(duration)-MIN(duration) 'diff_shortest_longest_deliveries'
+FROM runner_orders
+
+---------- Q6 ----------
+
+SELECT runner_id, order_id, distance/duration * 60 'avg_speed(km/h)'
+FROM runner_orders
+WHERE distance IS NOT NULL
+ORDER BY 1
+
+-- the trend seems to be an increase in delivery time per each runner, as time goes forward
+
+---------- Q7 ----------
+
+SELECT runner_id, CAST(ROUND((SELECT COUNT(*) FROM runner_orders r2 WHERE r1.runner_id = r2.runner_id AND pickup_time IS NOT NULL)
+					*100.0/COUNT(*), 0) AS NUMERIC(10, 2)) 'success_rate'
+FROM runner_orders r1
+GROUP BY runner_id
+
+
+
+---------- C. Ingredient Optimisation ----------
+
+
+---------- Q1 ----------
+
+WITH pizzas AS(
+	SELECT pizza_id, value AS 'topping', topping_name
+	FROM pizza_recipes
+	CROSS APPLY
+	string_split(CAST(toppings AS  VARCHAR), ',')
+	JOIN pizza_toppings t ON value = t.topping_id
+)
+
+SELECT p1.pizza_id, STUFF(
+	(SELECT ', ' + CAST(topping_name AS VARCHAR)
+	FROM pizzas p2 WHERE p1.pizza_id = p2.pizza_id
+	FOR XML PATH('')),
+	1, 2,'') AS 'pizza_standard_ingredients'
+FROM pizzas p1
+GROUP BY p1.pizza_id
+
+---------- Q2 ----------
+
+WITH extras AS(
+	SELECT value AS 'extra'
+	FROM customer_orders
+	CROSS APPLY
+	string_split(CAST(extras AS  VARCHAR), ',')
+)
+
+SELECT TOP 1 CAST(topping_name AS VARCHAR) 'extra', COUNT(*) 'n_times'
+FROM extras e JOIN pizza_toppings t ON e.extra = t.topping_id
+GROUP BY CAST(topping_name AS VARCHAR)
+ORDER BY COUNT(*) DESC
+
+---------- Q3 ----------
+
+WITH exclusions AS(
+	SELECT value AS 'exclusion'
+	FROM customer_orders
+	CROSS APPLY
+	string_split(CAST(exclusions AS  VARCHAR), ',')
+)
+
+SELECT TOP 1 CAST(topping_name AS VARCHAR) 'exclusion', COUNT(*) 'n_times'
+FROM exclusions e JOIN pizza_toppings t ON e.exclusion = t.topping_id
+GROUP BY CAST(topping_name AS VARCHAR)
+ORDER BY COUNT(*) DESC
+
+---------- Q4 ----------
+
+WITH extras AS(
+	SELECT order_id, pizza_id, extras, value AS 'extra'
+	FROM customer_orders
+	CROSS APPLY
+	string_split(CAST(extras AS  VARCHAR), ',')
+),
+
+exclusions AS(
+	SELECT order_id, pizza_id, exclusions, value AS 'exclusion'
+	FROM customer_orders
+	CROSS APPLY
+	string_split(CAST(exclusions AS  VARCHAR), ',')
+)
+
+SELECT o.*, 
+	CASE WHEN pizza_id = 1 THEN (
+		CASE WHEN EXISTS (SELECT 1 FROM extras e WHERE extra = 6 AND o.order_id = e.order_id AND o.pizza_id = e.pizza_id
+							AND o.extras = e.extras)
+				AND EXISTS (SELECT 1 FROM extras e WHERE extra = 9 AND o.order_id = e.order_id AND o.pizza_id = e.pizza_id
+							AND o.extras = e.extras)
+				AND EXISTS (SELECT 1 FROM exclusions e WHERE exclusion = 1 AND o.order_id = e.order_id AND o.pizza_id = e.pizza_id
+							AND o.exclusions = e.exclusions)
+				AND EXISTS (SELECT 1 FROM exclusions e WHERE exclusion = 4 AND o.order_id = e.order_id AND o.pizza_id = e.pizza_id
+							AND o.exclusions = e.exclusions) THEN 'Meat Lovers - Exclude Cheese, Bacon - Extra Musheoom, Peppers'
+			 WHEN EXISTS (SELECT 1 FROM exclusions e WHERE exclusion = 3 AND o.order_id = e.order_id AND o.pizza_id = e.pizza_id
+							AND o.exclusions = e.exclusions) THEN 'Meat Lovers - Exclude Beef'
+			 WHEN EXISTS (SELECT 1 FROM extras e WHERE extra = 1 AND o.order_id = e.order_id AND o.pizza_id = e.pizza_id
+							AND o.extras = e.extras) THEN 'Meat Lovers - Extra Bacon'
+		ELSE 'Meat Lovers' END)
+	END 'order_item'
+FROM customer_orders o
+
+
+
+---------- E. Bonus Questions ----------
+
+
+SELECT * FROM pizza_names
+INSERT INTO pizza_names VALUES (3, 'Supreme')
+SELECT * FROM pizza_names
+
+SELECT * FROM pizza_recipes
+INSERT INTO pizza_recipes VALUES (3, '1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12')
+SELECT * FROM pizza_recipes
