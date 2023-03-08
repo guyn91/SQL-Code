@@ -4,6 +4,7 @@ https://8weeksqlchallenge.com/case-study-3/
 
 Case Study Questions:
 
+
 --------------------------- A. Customer Journey ---------------------------
 
 SELECT *
@@ -21,10 +22,12 @@ ORDER BY customer_id, start_date
 --------------------------- B. Data Analysis Questions ---------------------------
 
 
+
 --------------------------- Q1 ---------------------------
 
 SELECT COUNT(DISTINCT customer_id) 'num_customers'
 FROM subscriptions
+
 
 --------------------------- Q2 ---------------------------
 
@@ -34,6 +37,7 @@ WHERE plan_id = 0
 GROUP BY DATEADD(DAY, 1, EOMONTH(start_date, -1))
 ORDER BY 1
 
+
 --------------------------- Q3 ---------------------------
 
 SELECT plan_name, COUNT(*) AS 'num'
@@ -42,12 +46,14 @@ ON p.plan_id = s.plan_id
 WHERE start_date >= '2021-01-01'
 GROUP BY plan_name
 
+
 --------------------------- Q4 ---------------------------
 
 SELECT COUNT(DISTINCT customer_id) AS 'num_of_churn_cus',
 	CAST(COUNT(customer_id) AS FLOAT)*100 / (SELECT COUNT(DISTINCT customer_id) FROM subscriptions) AS 'percentage'
 FROM subscriptions
 WHERE plan_id = 4
+
 
 --------------------------- Q5 ---------------------------
 
@@ -57,6 +63,7 @@ FROM subscriptions s1 JOIN subscriptions s2
 ON s1.customer_id = s2.customer_id AND s1.plan_id < s2.plan_id
 WHERE s1.plan_id = 0 AND s2.plan_id = 4
 AND DATEDIFF(DAY, s1.start_date, s2.start_date) = 7
+
 
 --------------------------- Q6 ---------------------------
 
@@ -68,6 +75,7 @@ WHERE s1.plan_id = 0
 AND DATEDIFF(DAY, s1.start_date, s2.start_date) <= 7
 GROUP BY plan_name
 ORDER BY 2 DESC
+
 
 --------------------------- Q7 ---------------------------
 
@@ -83,11 +91,13 @@ FROM
 GROUP BY plan_name
 ORDER BY 2 DESC
 
+
 --------------------------- Q8 ---------------------------
 
 SELECT COUNT(DISTINCT customer_id) AS 'upgraded_to_annual'
 FROM subscriptions
 WHERE plan_id = 3 AND start_date BETWEEN '2020-01-01' AND '2020-12-31'
+
 
 --------------------------- Q9 ---------------------------
 
@@ -97,6 +107,7 @@ SELECT AVG(days_to_upgrade) AS 'avg_days_to_annual' FROM
 	FROM subscriptions s1 JOIN subscriptions s2
 	ON s1.customer_id = s2.customer_id
 	WHERE s1.plan_id = 0 AND s2.plan_id = 3) A
+
 
 --------------------------- Q10 ---------------------------
 
@@ -116,6 +127,7 @@ SELECT days_group, AVG(days_to_upgrade) AS 'avg_days_to_annual' FROM
 GROUP BY days_group
 ORDER BY 2 DESC
 
+
 --------------------------- Q11 ---------------------------
 
 SELECT COUNT(*) AS 'downgraded_pro_to_basic'
@@ -126,6 +138,7 @@ WHERE plan_id = 1 AND previous_plan = 2 AND start_date BETWEEN '2020-01-01' AND 
 
 
 --------------------------- C. Challenge Payment Question ---------------------------
+
 
 SELECT customer_id, plan_name, MIN(start_date) AS start_plan
 FROM subscriptions s JOIN plans p ON s.plan_id = p.plan_id
