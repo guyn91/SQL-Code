@@ -4,17 +4,20 @@ https://8weeksqlchallenge.com/case-study-1/
 
 Case Study Questions:
 
+
 ----------------------------------Q1----------------------------------
 
 SELECT customer_id, SUM(price) AS 'total_spent'
 FROM sales JOIN menu ON sales.product_id = menu.product_id
 GROUP BY customer_id
 
+
 ----------------------------------Q2----------------------------------
 
 SELECT customer_id, COUNT(DISTINCT order_date) AS 'visits'
 FROM sales
 GROUP BY customer_id
+
 
 ----------------------------------Q3----------------------------------
 
@@ -25,6 +28,7 @@ FROM
 	JOIN menu ON s.product_id = menu.product_id
 WHERE s.rank = 1
 
+
 ----------------------------------Q4----------------------------------
 
 SELECT TOP 1 product_name, COUNT(*) AS no_purchases
@@ -32,12 +36,14 @@ FROM sales JOIN menu ON sales.product_id = menu.product_id
 GROUP BY product_name
 ORDER BY COUNT(*) DESC
 
+
 ----------------------------------Q5----------------------------------
 
 SELECT customer_id, product_id FROM
 (SELECT customer_id, product_id, COUNT(*) as num_orders, RANK() OVER(PARTITION BY customer_id
 			ORDER BY COUNT(*) DESC) 'ranking' FROM sales GROUP BY customer_id, product_id) cust
 WHERE ranking = 1
+
 
 ----------------------------------Q6----------------------------------
 
@@ -48,6 +54,7 @@ SELECT sales.customer_id, sales.product_id FROM
 	JOIN sales ON sales.customer_id = first_ord.customer_id
 	AND sales.order_date = first_ord.ord_date
 
+
 ----------------------------------Q7----------------------------------
 
 SELECT sales.customer_id, sales.product_id FROM
@@ -56,6 +63,7 @@ SELECT sales.customer_id, sales.product_id FROM
 	GROUP BY s.customer_id) last_ord
 	JOIN sales ON sales.customer_id = last_ord.customer_id
 	AND sales.order_date = last_ord.ord_date
+
 
 ----------------------------------Q8----------------------------------
 
@@ -66,6 +74,7 @@ SELECT summary.customer_id, COUNT(*) num_items, SUM(price) amount_spent FROM
 	JOIN menu ON s.product_id = menu.product_id) summary
 GROUP BY summary.customer_id
 
+
 ----------------------------------Q9----------------------------------
 
 SELECT customer_id,
@@ -73,6 +82,7 @@ SELECT customer_id,
 FROM sales s JOIN menu m ON s.product_id = m.product_id
 GROUP BY customer_id
 ORDER BY 2 DESC
+
 
 ----------------------------------Q10----------------------------------
 
