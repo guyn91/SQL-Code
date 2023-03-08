@@ -1,0 +1,186 @@
+SQL queries for Case Study #7 - Balanced Tree Clothing Co.
+https://8weeksqlchallenge.com/case-study-7/
+
+
+Case Study Questions:
+
+
+------------------------- High Level Sales Analysis -------------------------
+
+
+------------------------- Q1 -------------------------
+SELECT SUM(qty) 'Total quantity sold'
+FROM balanced_tree.sales
+
+
+------------------------- Q2 -------------------------
+SELECT SUM(1.0*qty*price) 'Sum of price before discounts'
+FROM balanced_tree.sales
+
+
+------------------------- Q3 -------------------------
+SELECT SUM(1.0*qty*price*discount/100) 'Sum of discounts'
+FROM balanced_tree.sales
+
+
+
+------------------------- Transaction Analysis -------------------------
+
+
+------------------------- Q1 -------------------------
+SELECT COUNT(DISTINCT txn_id) 'Unique transactions'
+FROM balanced_tree.sales
+
+
+------------------------- Q2 -------------------------
+
+SELECT AVG(1.0*num_products) 'txn_avg_products' FROM
+	(SELECT txn_id, COUNT(DISTINCT prod_id) 'num_products'
+	FROM balanced_tree.sales
+	GROUP BY txn_id) txn
+
+
+------------------------- Q3 -------------------------
+
+SELECT DISTINCT(PERCENTILE_CONT(0.25) WITHIN GROUP(ORDER BY txn_total) OVER()) '0.25',
+	PERCENTILE_CONT(0.5) WITHIN GROUP(ORDER BY txn_total) OVER() '0.5',
+	PERCENTILE_CONT(0.75) WITHIN GROUP(ORDER BY txn_total) OVER() '0.75'
+FROM (SELECT txn_id, SUM(1.0*qty*price*((100-discount)/100.0)) 'txn_total'
+	FROM balanced_tree.sales
+	GROUP BY txn_id) totals
+
+
+------------------------- Q4 -------------------------
+
+SELECT SUM(1.0*qty*price*discount/100)/COUNT(DISTINCT txn_id) 'avg_discount_amt'
+FROM balanced_tree.sales
+
+
+------------------------- Q5 -------------------------	
+
+WITH grp_mem AS(
+	SELECT member, COUNT(DISTINCT txn_id) 'num_txn'
+	FROM balanced_tree.sales
+	GROUP BY member
+)
+
+SELECT member, 1.0*num_txn/(SELECT SUM(num_txn) FROM grp_mem)*100 'percentage_of_txn'
+FROM grp_mem
+
+
+------------------------- Q6 -------------------------
+
+SELECT member, SUM(qty*price*(100-discount)/100.0)/COUNT(DISTINCT txn_id) 'avg_txn'
+FROM balanced_tree.sales
+GROUP BY member
+
+
+
+
+------------------------- Product Analysis -------------------------
+
+
+------------------------- Q1 -------------------------
+
+SELECT TOP 3 product_name, SUM(qty*s.price) 'total_sales'
+FROM balanced_tree.product_details d JOIN balanced_tree.sales s
+ON d.product_id = s.prod_id
+GROUP BY product_name
+ORDER BY 2 DESC
+
+
+------------------------- Q2 -------------------------
+
+SELECT segment_name, SUM(qty) 'total_qty', SUM(qty*s.price)-SUM(1.0*qty*s.price*discount/100) 'total_sales', SUM(1.0*qty*s.price*discount/100) 'Sum of discounts'
+FROM balanced_tree.product_details d JOIN balanced_tree.sales s
+ON d.product_id = s.prod_id
+GROUP BY segment_name
+
+
+------------------------- Q3 -------------------------
+
+SELECT segment_name, product_name, total_sales FROM
+	(SELECT segment_name, product_name, SUM(qty*s.price)-SUM(1.0*qty*s.price*discount/100) 'total_sales',
+		ROW_NUMBER() OVER(PARTITION BY segment_name ORDER BY SUM(qty*s.price)-SUM(1.0*qty*s.price*discount/100) DESC) 'sales_rank'
+	FROM balanced_tree.product_details d JOIN balanced_tree.sales s
+	ON d.product_id = s.prod_id
+	GROUP BY segment_name, product_name) seg_sales
+WHERE sales_rank =  1
+
+
+------------------------- Q4 -------------------------
+
+SELECT category_name, SUM(qty) 'total_qty', SUM(qty*s.price)-SUM(1.0*qty*s.price*discount/100) 'total_sales', SUM(1.0*qty*s.price*discount/100) 'Sum of discounts'
+FROM balanced_tree.product_details d JOIN balanced_tree.sales s
+ON d.product_id = s.prod_id
+GROUP BY category_name
+
+
+------------------------- Q5 -------------------------
+
+SELECT category_name, product_name, total_sales FROM
+	(SELECT category_name, product_name, SUM(qty*s.price)-SUM(1.0*qty*s.price*discount/100) 'total_sales',
+		ROW_NUMBER() OVER(PARTITION BY category_name ORDER BY SUM(qty*s.price)-SUM(1.0*qty*s.price*discount/100) DESC) 'sales_rank'
+	FROM balanced_tree.product_details d JOIN balanced_tree.sales s
+	ON d.product_id = s.prod_id
+	GROUP BY category_name, product_name) cat_sales
+WHERE sales_rank =  1
+
+
+------------------------- Q6 -------------------------
+
+WITH totals AS(
+SELECT segment_name, product_name, SUM(qty*s.price)-SUM(1.0*qty*s.price*discount/100) 'total_sales'
+FROM balanced_tree.product_details d JOIN balanced_tree.sales s
+ON d.product_id = s.prod_id
+GROUP BY segment_name, product_name)
+
+SELECT segment_name, product_name, ROUND(total_sales/(SUM(total_sales) OVER(PARTITION BY segment_name))*100,1) 'pct_sales'
+FROM totals
+
+
+------------------------- Q7 -------------------------
+
+WITH totals AS(
+SELECT category_name, segment_name, SUM(qty*s.price)-SUM(1.0*qty*s.price*discount/100) 'total_sales'
+FROM balanced_tree.product_details d JOIN balanced_tree.sales s
+ON d.product_id = s.prod_id
+GROUP BY category_name, segment_name)
+
+SELECT category_name, segment_name, ROUND(total_sales/(SUM(total_sales) OVER(PARTITION BY category_name))*100,1) 'pct_sales'
+FROM totals
+
+
+------------------------- Q8 -------------------------
+
+WITH totals AS(
+SELECT category_name, SUM(qty*s.price)-SUM(1.0*qty*s.price*discount/100) 'total_sales'
+FROM balanced_tree.product_details d JOIN balanced_tree.sales s
+ON d.product_id = s.prod_id
+GROUP BY category_name)
+
+SELECT category_name, ROUND(total_sales/(SUM(total_sales) OVER())*100,1) 'pct_sales'
+FROM totals
+
+
+------------------------- Q9 -------------------------
+
+SELECT product_name, ROUND(100.0*COUNT(DISTINCT txn_id)/(SELECT COUNT(DISTINCT txn_id) FROM balanced_tree.sales),1) 'penetration'
+FROM balanced_tree.product_details d LEFT JOIN balanced_tree.sales s
+ON d.product_id = s.prod_id
+GROUP BY product_name
+ORDER BY 2 DESC
+
+
+------------------------- Q10 -------------------------
+
+WITH combinations AS(
+	SELECT s1.prod_id 'product1' , s2.prod_id 'product2' , s3.prod_id 'product3', COUNT(*) 'num_transactions'
+	FROM balanced_tree.sales s1 JOIN balanced_tree.sales s2 ON s1.prod_id < s2.prod_id AND s1.txn_id = s2.txn_id
+	JOIN balanced_tree.sales s3 ON s2.prod_id < s3.prod_id AND s2.txn_id = s3.txn_id
+	GROUP BY s1.prod_id, s2.prod_id, s3.prod_id
+)
+
+SELECT *
+FROM combinations
+WHERE num_transactions IN (SELECT MAX(num_transactions) FROM combinations)
