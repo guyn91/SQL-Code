@@ -7,6 +7,7 @@ Case Study Questions:
 
 ---------- Cleaning customer_orders ----------
 
+
 UPDATE customer_orders
 SET extras = NULL
 WHERE extras IN ('', 'null')
@@ -16,7 +17,9 @@ SET exclusions = NULL
 WHERE exclusions IN ('', 'null')
 
 
+
 ---------- Cleaning runner_orders ----------
+
 
 UPDATE runner_orders
 SET pickup_time = NULL
@@ -70,10 +73,12 @@ ALTER COLUMN duration INTEGER
 SELECT COUNT(*) 'number_of_pizzas_ordered'
 FROM customer_orders
 
+
 ---------- Q2 ----------
 
 SELECT  COUNT(DISTINCT order_id) 'unique_orders'
 FROM customer_orders
+
 
 ---------- Q3 ----------
 
@@ -82,6 +87,7 @@ FROM runner_orders
 WHERE cancellation IS NULL
 GROUP BY runner_id
 
+
 ---------- Q4 ----------
 
 SELECT pizza_id, COUNT(*) 'amount_delivered'
@@ -89,6 +95,7 @@ FROM customer_orders c JOIN runner_orders r
 ON c.order_id = r.order_id
 WHERE cancellation IS NULL
 GROUP BY pizza_id
+
 
 ---------- Q5 ----------
 
@@ -99,6 +106,7 @@ FROM customer_orders c JOIN pizza_names p ON c.pizza_id = p.pizza_id JOIN runner
 WHERE cancellation IS NULL
 GROUP BY customer_id
 
+
 ---------- Q6 ----------
 SELECT MAX(number_of_pizzas) 'Max_pizzas_in_order' FROM
 	(SELECT c.order_id, COUNT(*) 'number_of_pizzas'
@@ -106,6 +114,7 @@ SELECT MAX(number_of_pizzas) 'Max_pizzas_in_order' FROM
 	ON c.order_id = r.order_id
 	WHERE cancellation IS NULL
 	GROUP BY c.order_id) num_pizzas
+
 
 ---------- Q7 ----------
 
@@ -115,11 +124,13 @@ FROM customer_orders o JOIN runner_orders r ON o.order_id = r.order_id
 WHERE cancellation IS NULL
 GROUP BY customer_id
 
+
 ---------- Q8 ----------
 
 SELECT SUM(CASE WHEN (exclusions IS NOT NULL) AND (extras IS NOT NULL) THEN 1 ELSE 0 END) 'pizzas_with_exc_and_ext'
 FROM customer_orders o JOIN runner_orders r ON o.order_id = r.order_id
 WHERE cancellation IS NULL
+
 
 ---------- Q9 ----------
 
@@ -131,6 +142,7 @@ WITH h AS
 SELECT h.hour_of_day, SUM(CASE WHEN h.hour_of_day = o.hr THEN 1 ELSE 0 END) 'pizzas_ordered'
 FROM h LEFT JOIN o ON h.hour_of_day = o.hr
 GROUP BY hour_of_day
+
 
 ---------- Q10 ----------
 
@@ -160,6 +172,7 @@ SELECT week_date, SUM(CASE WHEN DATEDIFF(day, week_date, registration_date) BETW
 FROM dates, runners 
 GROUP BY week_date
 
+
 ---------- Q2 ----------
 
 WITH arrivals AS
@@ -170,6 +183,7 @@ WITH arrivals AS
 SELECT runner_id, AVG(time_to_arrive) 'avg_minutes_to_arrive'
 FROM arrivals
 GROUP BY runner_id
+
 
 ---------- Q3 ----------
 
@@ -188,16 +202,19 @@ FROM prep_times
 
 -- correlation is 0.83 - meaning, strong correlation.
 
+
 ---------- Q4 ----------
 
 SELECT customer_id, AVG(distance) 'avg_distance'
 FROM customer_orders o JOIN runner_orders r ON o.order_id = r.order_id
 GROUP BY customer_id
 
+
 ---------- Q5 ----------
 
 SELECT MAX(duration)-MIN(duration) 'diff_shortest_longest_deliveries'
 FROM runner_orders
+
 
 ---------- Q6 ----------
 
@@ -207,6 +224,7 @@ WHERE distance IS NOT NULL
 ORDER BY 1
 
 -- the trend seems to be an increase in delivery time per each runner, as time goes forward
+
 
 ---------- Q7 ----------
 
@@ -238,6 +256,7 @@ SELECT p1.pizza_id, STUFF(
 FROM pizzas p1
 GROUP BY p1.pizza_id
 
+
 ---------- Q2 ----------
 
 WITH extras AS(
@@ -252,6 +271,7 @@ FROM extras e JOIN pizza_toppings t ON e.extra = t.topping_id
 GROUP BY CAST(topping_name AS VARCHAR)
 ORDER BY COUNT(*) DESC
 
+
 ---------- Q3 ----------
 
 WITH exclusions AS(
@@ -265,6 +285,7 @@ SELECT TOP 1 CAST(topping_name AS VARCHAR) 'exclusion', COUNT(*) 'n_times'
 FROM exclusions e JOIN pizza_toppings t ON e.exclusion = t.topping_id
 GROUP BY CAST(topping_name AS VARCHAR)
 ORDER BY COUNT(*) DESC
+
 
 ---------- Q4 ----------
 
