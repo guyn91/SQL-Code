@@ -1,0 +1,171 @@
+SQL queries for Case Study #6 - Clique Bait
+https://8weeksqlchallenge.com/case-study-6/
+
+
+Case Study Questions:
+
+
+---------- Digital Analysis ----------
+
+
+---------- Q1 ----------
+
+SELECT COUNT(*) 'num_users'
+FROM users
+
+
+---------- Q2 ----------
+
+SELECT AVG(cookies) 'average_cookies_per_user'
+FROM (SELECT user_id, COUNT (DISTINCT cookie_id) 'cookies'
+		FROM users
+		GROUP BY user_id) a
+
+
+---------- Q3 ----------
+
+SELECT MONTH(event_time) 'month', COUNT(DISTINCT visit_id) 'num_visits'
+FROM events
+GROUP BY MONTH(event_time)
+ORDER BY 1
+
+
+---------- Q4 ----------
+
+SELECT event_type, COUNT(*) 'number_of_events'
+FROM events
+GROUP BY event_type
+
+
+---------- Q5 ----------
+
+SELECT 100.0*COUNT(*)/(SELECT COUNT(*) FROM events) 'pct_of_purchase_events'
+FROM events e JOIN event_identifier i ON e.event_type = i.event_type
+WHERE event_name = 'Purchase'
+
+
+---------- Q6 ----------
+
+WITH checkouts AS
+(
+	SELECT DISTINCT visit_id FROM events WHERE page_id = 12
+),
+no_purchases AS
+(
+	SELECT DISTINCT visit_id FROM events
+	WHERE visit_id NOT IN (SELECT DISTINCT visit_id FROM events WHERE event_type = 3)
+)
+
+SELECT 100.0*COUNT(*)/(SELECT COUNT(DISTINCT visit_id) FROM events) 'pct_checkout_without_purchase'
+FROM checkouts c JOIN no_purchases np ON c.visit_id = np.visit_id
+
+
+---------- Q7 ----------
+
+SELECT TOP 3 page_id, COUNT(*) 'page_views'
+FROM events
+WHERE event_type = 1
+GROUP BY page_id
+ORDER BY 2 DESC
+
+
+---------- Q8 ----------
+
+SELECT product_category, COUNT(*) 'number_of_page_views'
+FROM events e JOIN page_hierarchy h ON e.page_id = h.page_id
+	JOIN event_identifier i ON e.event_type = i.event_type
+WHERE event_name = 'Page View' AND product_category IS NOT NULL
+GROUP BY product_category
+ORDER BY 2 DESC
+
+
+---------- Q9 ----------
+
+SELECT product_id, COUNT(*) 'number_of_purchases'
+FROM events e JOIN page_hierarchy h ON e.page_id = h.page_id
+	JOIN event_identifier i ON e.event_type = i.event_type
+WHERE event_name = 'Purchase'
+GROUP BY product_id
+ORDER BY 2 DESC
+
+
+
+
+---------- Product Funnel Analysis ----------
+
+
+---------- Aggregation by product_id ----------
+
+
+WITH abandoned AS
+(
+	SELECT e1.visit_id, e1.page_id, product_id
+	FROM events e1 JOIN page_hierarchy h1 ON e1.page_id = h1.page_id
+	WHERE event_type = 2
+		AND NOT EXISTS (SELECT e2.visit_id, e2.page_id
+					FROM events e2 JOIN page_hierarchy h2 ON e2.page_id = h2.page_id
+					WHERE event_type = 3 AND e1.visit_id = e2.visit_id AND e1.page_id = e2.page_id)
+)
+
+SELECT h.product_id, SUM(CASE WHEN event_name = 'Page View' THEN 1 ELSE 0 END) 'page_views',
+		SUM(CASE WHEN event_name = 'Add to Cart' THEN 1 ELSE 0 END) 'added_to_cart',
+		(SELECT COUNT(*) FROM abandoned a WHERE h.product_id = a.product_id) 'abandoned',
+		SUM(CASE WHEN event_name = 'Purchase' THEN 1 ELSE 0 END) 'purchases'
+FROM events e JOIN page_hierarchy h ON e.page_id = h.page_id
+	JOIN event_identifier i ON e.event_type = i.event_type
+WHERE product_id IS NOT NULL
+GROUP BY product_id
+
+
+---------- Aggregation by product_category ----------
+
+
+WITH abandoned AS
+(
+	SELECT e1.visit_id, e1.page_id, product_category
+	FROM events e1 JOIN page_hierarchy h1 ON e1.page_id = h1.page_id
+	WHERE event_type = 2
+		AND NOT EXISTS (SELECT e2.visit_id, e2.page_id
+					FROM events e2 JOIN page_hierarchy h2 ON e2.page_id = h2.page_id
+					WHERE event_type = 3 AND e1.visit_id = e2.visit_id AND e1.page_id = e2.page_id)
+)
+
+SELECT h.product_category, SUM(CASE WHEN event_name = 'Page View' THEN 1 ELSE 0 END) 'page_views',
+		SUM(CASE WHEN event_name = 'Add to Cart' THEN 1 ELSE 0 END) 'added_to_cart',
+		(SELECT COUNT(*) FROM abandoned a WHERE h.product_category = a.product_category) 'abandoned',
+		SUM(CASE WHEN event_name = 'Purchase' THEN 1 ELSE 0 END) 'purchases'
+FROM events e JOIN page_hierarchy h ON e.page_id = h.page_id
+	JOIN event_identifier i ON e.event_type = i.event_type
+WHERE product_category IS NOT NULL
+GROUP BY product_category
+
+
+
+
+---------- Campaigns Analysis ----------
+
+WITH campaigns AS
+(
+	SELECT campaign_name, start_date, end_date, MIN(value) 'min_product', MAX(value) 'max_product'
+	FROM campaign_identifier CROSS APPLY STRING_SPLIT(products,'-')
+	GROUP BY campaign_name, start_date, end_date
+),
+
+visits_campaigns AS
+(
+	SELECT visit_id, product_id, campaign_name
+	FROM page_hierarchy h JOIN events e ON h.page_id = e.page_id, campaigns
+	WHERE (product_id BETWEEN min_product AND max_product)
+		AND (event_time BETWEEN start_date AND end_date)
+)
+
+
+SELECT visit_id, MIN(event_time) 'visit_start_time',
+		(SELECT COUNT(*) FROM events e2 WHERE e1.visit_id = e2.visit_id AND e2.event_type = 1) 'page_views',
+		(SELECT COUNT(*) FROM events e2 WHERE e1.visit_id = e2.visit_id AND e2.event_type = 2) 'cart_adds',
+		CASE WHEN EXISTS (SELECT 1 FROM events e2 WHERE e1.visit_id = e2.visit_id AND e2.event_type = 3) THEN 1 ELSE 0 END 'purchase',
+		(SELECT campaign_name FROM visits_campaigns WHERE e1.visit_id = visits_campaigns.visit_id) 'campaign_name',
+		(SELECT COUNT(*) FROM events e2 WHERE e1.visit_id = e2.visit_id AND e2.event_type = 4) 'impression',
+		(SELECT COUNT(*) FROM events e2 WHERE e1.visit_id = e2.visit_id AND e2.event_type = 5) 'click'
+FROM events e1 JOIN users u ON e1.cookie_id = u.cookie_id
+GROUP BY visit_id
