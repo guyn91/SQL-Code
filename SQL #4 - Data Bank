@@ -1,0 +1,118 @@
+SQL queries for Case Study #4 - Data Bank
+https://8weeksqlchallenge.com/case-study-4/
+
+
+Case Study Questions:
+
+
+---------------- A. Customer Nodes Exploration ----------------
+
+
+---------------- Q1 ----------------
+
+SELECT COUNT(DISTINCT node_id) AS 'num_nodes'
+FROM customer_nodes
+
+
+---------------- Q2 ----------------
+
+SELECT region_id, COUNT(DISTINCT node_id) AS 'num_nodes'
+FROM customer_nodes
+GROUP BY region_id
+
+
+---------------- Q3 ----------------
+
+SELECT region_id, COUNT(DISTINCT customer_id) AS 'num_cust'
+FROM customer_nodes
+WHERE start_date <= CAST(GETDATE() AS Date) AND end_date >= CAST(GETDATE() AS Date)
+GROUP BY region_id
+
+
+---------------- Q4 ----------------
+
+WITH days_diff AS(
+SELECT cn.*, CASE WHEN end_date = '9999-12-31' THEN DATEDIFF(day, start_date, GETDATE())
+			ELSE DATEDIFF(day, start_date, end_date) END AS 'days_in_node'
+FROM customer_nodes cn)
+
+SELECT SUM(days_in_node)/COUNT(*) AS 'avg_days_in_node'
+FROM days_diff
+
+
+---------------- Q5 ----------------
+
+WITH days_diff AS(
+SELECT region_id, CASE WHEN end_date = '9999-12-31' THEN DATEDIFF(day, start_date, GETDATE())
+			ELSE DATEDIFF(day, start_date, end_date) END AS 'days_in_node'
+FROM customer_nodes cn)
+
+SELECT DISTINCT region_id, PERCENTILE_CONT(0.5) WITHIN GROUP(ORDER BY days_in_node) OVER(PARTITION BY region_id) 'median',
+		PERCENTILE_CONT(0.8) WITHIN GROUP(ORDER BY days_in_node) OVER(PARTITION BY region_id) '0.8',
+		PERCENTILE_CONT(0.95) WITHIN GROUP(ORDER BY days_in_node) OVER(PARTITION BY region_id) '0.95'
+FROM days_diff
+
+
+
+---------------- B. Customer Transactions ----------------
+
+
+---------------- Q1 ----------------
+
+SELECT txn_type, COUNT(*) AS transaction_count, SUM(txn_amount) AS transaction_sum
+FROM customer_transactions
+GROUP BY txn_type
+
+
+---------------- Q2 ----------------
+
+SELECT customer_id, COUNT(*) AS num_deposits, SUM(txn_amount)/COUNT(*) AS 'average_deposit'
+FROM customer_transactions
+WHERE txn_type = 'deposit'
+GROUP BY customer_id;
+
+
+---------------- Q3 ----------------
+
+WITH trsc AS
+(
+	SELECT customer_id, MONTH(txn_date) 'month_num',
+		SUM(CASE WHEN txn_type = 'deposit' THEN 1 ELSE 0 END) 'num_deposits',
+		SUM(CASE WHEN txn_type = 'withdrawal' THEN 1 ELSE 0 END) 'num_withdrawals',
+		SUM(CASE WHEN txn_type = 'purchase' THEN 1 ELSE 0 END) 'num_purchases'
+	FROM customer_transactions
+	GROUP BY customer_id, MONTH(txn_date)
+)
+
+SELECT month_num, COUNT(*) AS 'num_cust'
+FROM trsc
+WHERE num_deposits > 1 AND (num_withdrawals > 0 OR num_purchases > 0)
+GROUP BY month_num
+ORDER BY month_num
+
+
+---------------- Q4 ----------------
+
+SELECT DISTINCT customer_id, EOMONTH(txn_date) AS 'eomonth_date',
+	SUM(CASE WHEN txn_type = 'deposit' THEN txn_amount ELSE txn_amount*(-1) END)
+		OVER(PARTITION BY customer_id ORDER BY EOMONTH(txn_date)) AS 'closing_balance'
+FROM customer_transactions
+ORDER BY 1, 2
+
+
+---------------- Q5 ----------------
+
+WITH balances AS(
+SELECT DISTINCT customer_id, EOMONTH(txn_date) AS 'eomonth_date',
+	SUM(CASE WHEN txn_type = 'deposit' THEN txn_amount ELSE txn_amount*(-1) END)
+		OVER(PARTITION BY customer_id ORDER BY EOMONTH(txn_date)) AS 'closing_balance'
+FROM customer_transactions),
+
+changes AS(
+SELECT balances.*, CASE WHEN LAG(closing_balance, 1) OVER(PARTITION BY customer_id ORDER BY eomonth_date) > 0 THEN
+		(CAST(closing_balance AS FLOAT)-LAG(closing_balance, 1) OVER(PARTITION BY customer_id ORDER BY eomonth_date))*100 / LAG(closing_balance, 1) OVER(PARTITION BY customer_id ORDER BY eomonth_date) ELSE NULL END AS 'pct_change'
+FROM balances)
+
+SELECT CAST(COUNT(DISTINCT customer_id) AS FLOAT) / (SELECT COUNT(DISTINCT customer_id) FROM customer_transactions)
+FROM changes
+WHERE pct_change > 5
