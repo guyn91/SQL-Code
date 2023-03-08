@@ -1,0 +1,99 @@
+SQL queries for Case Study #1 - Danny's Diner
+https://8weeksqlchallenge.com/case-study-1/
+
+
+Case Study Questions:
+
+----------------------------------Q1----------------------------------
+
+SELECT customer_id, SUM(price) AS 'total_spent'
+FROM sales JOIN menu ON sales.product_id = menu.product_id
+GROUP BY customer_id
+
+----------------------------------Q2----------------------------------
+
+SELECT customer_id, COUNT(DISTINCT order_date) AS 'visits'
+FROM sales
+GROUP BY customer_id
+
+----------------------------------Q3----------------------------------
+
+SELECT s.customer_id, product_name
+FROM
+	(SELECT customer_id, order_date, product_id, ROW_NUMBER() OVER(PARTITION BY customer_id ORDER BY order_date) AS 'rank'
+	FROM sales) s
+	JOIN menu ON s.product_id = menu.product_id
+WHERE s.rank = 1
+
+----------------------------------Q4----------------------------------
+
+SELECT TOP 1 product_name, COUNT(*) AS no_purchases
+FROM sales JOIN menu ON sales.product_id = menu.product_id
+GROUP BY product_name
+ORDER BY COUNT(*) DESC
+
+----------------------------------Q5----------------------------------
+
+SELECT customer_id, product_id FROM
+(SELECT customer_id, product_id, COUNT(*) as num_orders, RANK() OVER(PARTITION BY customer_id
+			ORDER BY COUNT(*) DESC) 'ranking' FROM sales GROUP BY customer_id, product_id) cust
+WHERE ranking = 1
+
+----------------------------------Q6----------------------------------
+
+SELECT sales.customer_id, sales.product_id FROM
+	(SELECT s.customer_id, MIN(order_date) as ord_date
+	FROM sales s JOIN members m ON s.customer_id = m.customer_id AND s.order_date >= join_date
+	GROUP BY s.customer_id) first_ord
+	JOIN sales ON sales.customer_id = first_ord.customer_id
+	AND sales.order_date = first_ord.ord_date
+
+----------------------------------Q7----------------------------------
+
+SELECT sales.customer_id, sales.product_id FROM
+	(SELECT s.customer_id, MAX(order_date) as ord_date
+	FROM sales s JOIN members m ON s.customer_id = m.customer_id AND s.order_date < join_date
+	GROUP BY s.customer_id) last_ord
+	JOIN sales ON sales.customer_id = last_ord.customer_id
+	AND sales.order_date = last_ord.ord_date
+
+----------------------------------Q8----------------------------------
+
+SELECT summary.customer_id, COUNT(*) num_items, SUM(price) amount_spent FROM
+	(SELECT s.*, price
+	FROM sales s JOIN members m ON s.customer_id = m.customer_id
+	AND s.order_date < m.join_date
+	JOIN menu ON s.product_id = menu.product_id) summary
+GROUP BY summary.customer_id
+
+----------------------------------Q9----------------------------------
+
+SELECT customer_id,
+		SUM(CASE WHEN product_name = 'sushi' THEN 20*price ELSE 10*price END) 'Points'
+FROM sales s JOIN menu m ON s.product_id = m.product_id
+GROUP BY customer_id
+ORDER BY 2 DESC
+
+----------------------------------Q10----------------------------------
+
+SELECT mem.customer_id,
+		SUM(CASE
+			WHEN DATEDIFF(DAY, join_date, order_date) < 7 THEN 20*price
+			WHEN DATEDIFF(DAY, join_date, order_date) >= 7 AND product_name = 'sushi' THEN 20*price
+			ELSE 10*price END) 'Points'
+FROM sales s JOIN menu men ON s.product_id = men.product_id
+	JOIN members mem ON s.customer_id = mem.customer_id
+WHERE order_date < '2021-02-01' AND order_date >= join_date
+GROUP BY mem.customer_id
+ORDER BY 2 DESC
+
+
+---------------------------------Bonus---------------------------------
+
+SELECT s.customer_id, order_date, product_name, price, 
+		CASE WHEN order_date >= join_date THEN 'Y' ELSE 'N' END 'member',
+		CASE WHEN order_date >= join_date THEN RANK() OVER(PARTITION BY s.customer_id ORDER BY case when order_date < join_date then 1 else 0 end, order_date)
+				ELSE null END 'ranking'
+FROM sales s LEFT JOIN members mem ON s.customer_id = mem.customer_id
+JOIN menu men ON s.product_id = men.product_id
+ORDER BY s.customer_id, order_date, product_name
